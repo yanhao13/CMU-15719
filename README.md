@@ -1,10 +1,10 @@
 # CMU-15719
 https://www.cs.cmu.edu/~15719/
-## Introduction, Use cases, and Elasticity
-### A View of Cloud Computing
-### [Armbrust2010](https://dl.acm.org/doi/10.1145/1721654.1721672)
-### Clearing the clouds away from the true potential and obstacles posed by this computing capability.
-### Oracle's CEO Larry Ellison vent his frustration: "The interesting thing about cloud computing is that we've redefined cloud computing to include exerything that we already do.... I don't understand what we would do differently in the light of cloud computing other than change the wording of some of our ads."
+### Introduction, Use cases, and Elasticity
+**A View of Cloud Computing**<br />
+**[Armbrust2010](https://dl.acm.org/doi/10.1145/1721654.1721672)**<br />
+**Clearing the clouds away from the true potential and obstacles posed by this computing capability.**<br />
+**Oracle's CEO Larry Ellison vent his frustration: "The interesting thing about cloud computing is that we've redefined cloud computing to include exerything that we already do.... I don't understand what we would do differently in the light of cloud computing other than change the wording of some of our ads."**<br />
 cloud computing, the long-held dream of computing as a utility, has the potential to transform a large part of it industry, making sw even more attractive aaS and shaping the way it hw is designed and purchased; 
 developers with innovative ideas for new internet services no longer require the large capital outlays in hw to deploy their service or the human expense to operate it, they need not be concerned about overprovisioning for a service whose popularity does not meet their predictions, hus wasting costly resources, or underprovisioning for one that becomes wildly popular, thus missing potential customers and revenue; 
 moreover, companies with large batch-oriented tasks can get results as quickly as their programs can scale, since using 1000 servers for 1hr costs no more than using 1 server for 1000hrs, this elasticity of resources, without paying a premium for large scale, is unprecedented in history of it.
