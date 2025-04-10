@@ -1,8 +1,8 @@
 # CMU-15719
 https://www.cs.cmu.edu/~15719/
 ## Introduction, Use cases, and Elasticity
-### [Armbrust2010](https://dl.acm.org/doi/10.1145/1721654.1721672)
 ### A View of Cloud Computing
+### [Armbrust2010](https://dl.acm.org/doi/10.1145/1721654.1721672)
 ### Clearing the clouds away from the true potential and obstacles posed by this computing capability.
 ### Oracle's CEO Larry Ellison vent his frustration: "The interesting thing about cloud computing is that we've redefined cloud computing to include exerything that we already do.... I don't understand what we would do differently in the light of cloud computing other than change the wording of some of our ads."
 cloud computing, the long-held dream of computing as a utility, has the potential to transform a large part of it industry, making sw even more attractive aaS and shaping the way it hw is designed and purchased; 
