@@ -1,5 +1,4 @@
 # CMU-15719
-https://www.cs.cmu.edu/~15719/
 ### Introduction, Use cases, and Elasticity
 ### A View of Cloud Computing
 ### [Armbrust2010](https://dl.acm.org/doi/10.1145/1721654.1721672)
