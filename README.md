@@ -168,3 +168,40 @@ this structure is sufficiently generic to support a number of different device p
 we decouple production of reqs or responses from the notification of the other party -in the case of reqs, a domain may enqueue multiple entries before invoking a hypercall to alert Xen, in the case of responses, a domain can defer delivery of a notificatioon event by specifying a threshold number of responses, this allows each domain to trade-off latency and throughput requirements, similarly to the flow-aware interrupt dispatch in the ArseNIC Gigabit Ethernet interface.
 ### Building a New Domain
 the task of building the initial guest os structures for a new domain is mostly delegated to Domain0 which uses its privileged control interfaces(see section Control and Mgmt) to access the new domain's mem and inform Xen of initial reg state, this approach has a number of advantages compared with building a domain entirely within Xen, including reduced hypervisor complexity and improved rebustness(accesses to privileged interface are sanity checked which allowed us to catch many bugs during initial deployment); however, most important is the case with which the building process can be extended and specialized to cope with new guest os, for example, the boot-time addr space assumed by the linux kernel is considerably simpler than that expected by windows xp, it would be possible to specify a fixed initial mem layout for all guest os, but this would require additional bootstrap code within every guest os to lay things out as required by the rest of os, unfortunately this type of code is tricky to implement correctly, for simplicity and robustness it is therefore better to implement it within Domain0 which can provide much richer diagnostics and debugging support than a bootstrap environment.
+****
+### Programming Models and Frameworks
+### MapReuce :Simplified Data Processing on Large Clusters
+### [Dean2004](https://www.usenix.org/legacy/events/osdi04/tech/full_papers/dean/dean.pdf)
+MapReduce is a programming model and an associated implementation for processing and generating large datasets, users specify a map function that processes a key-value pair to generate a set of immediate key-value pairs, and a reduce function that merges all intermediate values associated with the same immediate key, many real world tasks are expressible in this model; 
+programs written in this functional style are automatically parallelized and executed on a large cluster of commodity machines, the runtime system takes care of details of partitioning input data, scheduling the program's exec across a set of machines, handling machine failures, and managing required inter-machine comm, this allows programmers without any experience with parallel and distributed systems to easily utilize resources of a large distributed system; 
+our implementation of MapReduce runs on a large cluster of commidity machines and it is highly scalable :a typical MapReduce computation processes many terabytes of data on thousands of machines, programmers find the system easy to use :hundreds of MapReduce programs have been implemented and 1000+ MapReduce jobs are executed on Google's clusters everyday. 
+over the past 5 years, Google have implemented hundreds of special-purpose computations that process large amounts of raw data, such as crawled documents, web req logs, etc., to compute various kinds of derived data, such as inverted indices, various implementations of the graph structure of web documents, the summaries of #pages crawled per host, the set of most frequent queries in a given day, etc., most such computations are conceptually straightforward, however, input data is usually large and computatins have to be distributed across hundreds of thousands of machines in order to finish in a reasonable amount of time, the issues of how to parallelize computation, distribute data, and handle failures conspire to obscure original simple computation with large amounts of complex code to deal with these issues; 
+as a reaction to this complexity, we designed a new abstraction that allows us to express the simple computations we were trying to perform but hides the messy details of parallelization, fault-tolerance, data distribution, and load balancing in a lib, our abstraction is inspired by map, reduce primitives present in Lisp and many other functional langs, we realized that most of our computations involved applying a map op to each logical record in our input in order to compute a set of intermediate key-value pairs, and then applying a reduce op to all values that shared the same key in order to combine derived data appropriately, our use of a functional model with user-specified map, reduce ops allows us to parallelize large computations easily and to use re-exec as the primary mechanism for fault tolerance; 
+the major contributions of this work are a simple and powerful interface that enables automatic parallelization and distribution of large-scale computations, combined with an implementation of this interface that achieves high perf on large clusters of commidity PCs.
+### Programming Model
+the computation takes a set of input key-value pairs, and produces a set of output key-value pairs, the user of MapReduce lib expresses the computation as 2 functions :Map, Reduce, here, Map, written by user takes an input pair and produces a set of intermediate key-value pairs, the MapReduce lib groups together all intermediate values associated with the same intermediate key *I* and passes them to the Reduce function, Reduce, also written by user accepts an intermediate key *I* and and a set of values for that key, it merges together these values to form a possibly smaller set of values, typically just 0 or 1 output value is produced per Reduce invocation, the intermediate values are supplied to user's reduce function via an iterator, this allows us to handle lists of values that are too large to fit in mem.
+**example:** consider the problem of counting #occurrences of each word in a large collection of documents, user would write code similar to the following pseudo-code:
+```
+map(String key, String value):
+  // key: document time
+  // value: document contents
+  for each word w in value:
+    EmitIntermediate(w, "1");
+reduce(String key, Iterator values):
+  // key: a word
+  // values: a list of counts
+  int result = 0;
+  for each v in values:
+    result += ParseInt(v);
+  Emit(AsString(result));
+```
+here, map function emits each word plus an associated count of occurrences(just 1 in this simple example), reduce function sums together all counts emitted for a particular word;
+in addition, user writes code to fill a mapreduce specification object with names of input and output files, and optional tuning params, user then invokes MapReduce function, passing it the specification obejct; user's code is linked together with MapReduce lib(implemented in C++);
+**types:** even though the previous pseudo-code is written in terms of string inputs and outputs, conecptually the map and reduce functions supplied by user have associated types:
+···
+map    (k1,v1)       ->list(k2,v2)
+reduce (k2,list(v2)) ->list(v2)
+```
+i.e., the input keys and values are drawn from a different domain than the output keys and values, furthermore, the intermediate keys and values are from the same domains as the output keys and values;
+our C++ implementation passes strings to and from user-defined functions and leaves it to user code to convert bt strings and appropriate types;
+**more examples:**
