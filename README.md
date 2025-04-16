@@ -232,3 +232,42 @@ to use Spark, developers write a driver program that implements the high-level c
 **parallel ops:** several parallel ops can be performed on rdds including: (i)reduce -combines dataset elements using an associative function to produce a result at the driver program, (ii)collect -sends all elements of the dataset to the driver program such as an easy way to update an array in parallel is to parallelize, map, and collect the array, (iii)foreach -passes each element through a user provided functions, this is only done for the side effects of the function(which might be to copy data to another system or to update a shared var as explained below); we note that Spark does not currently support a grouped reduce op as in MapReduce, results are only collected at 1 process(the driver, however, local functions are first performed at each node), we plan to support grouped reductions in the future using a shuffle transformation on distributed datasets, however, even using a single reducer is enough to express a variety of useful algorithms such as a recent paper on MapReduce for ml on multicore systems implemented 10 learning algorithms without supporting parallel reduction; 
 **shared vars:** programmers invoke ops like map, filter, and reduce by passing closures(functions) to Spark, as is typical in functional programming, these clusters can refer to vars in the scope where they are created; normally, when Spark runs a closure on a worker node, these vars are copied to the worker, however, Spark also lets programmers create 2 restricted types of shared vars to support 2 simple but common usage patterns including: (i)broadcast vars -if a large read-only piece of data(such as a lookup table) is used in multiple parallel ops, it is preferable to distribute it to workers only once instead of packaging it with every closure, Spark lets programmers create a broadcast var object that wraps the value and ensures that it is only copied to each worker once, (ii)accumulators -these are vars that workers can only add to using an associative op, and that only the driver can read, they can be used to implement counters as in MapReduce and to provide a more imperative syntax for parallel sums, accumulators can be defined for any type that has an add op and a 0 value, due to their add-only semantics, they are easy to make fault-tolerant.
 ### Examples
+we now show some sample Spark programs, note that we omit var types because Scala supports type inference; 
+**text search:** suppose that we wish to count lines containing errors in a large log file stored in hdfs, this can be implemented by starting with a file dataset object as follows:
+```
+val file = spark.textFile("hdfs://...")
+val errs = file.filter(_.contains("ERROR"))
+val ones = errs.map(_ => 1)
+val count = ones.reduce(_+_)
+```
+we first create a distributed dataset called file that represents the hdfs file as a collection of lines, we transform this dataset to create the set of lines containing ERROR(errs), and then amp each line a 1 and add up these 1s using reduce, the arguments to filter, map, and reduce are Scala syntax for function literals; note that errs and ones are lazy rdds that are never materialized, instead, when reduce is called, each worker node scans input blocks in a streaming manner to evaluate ones, adds these to perform a local reduce, and sends its local count to the driver, when used with lazy datasets in this manner, Spark closely emulates MapReduce; where Spark differs from other frameworks is that it can make some of the intermediate datasets persist across operations, such as if wanted to reuse the errs dataset, we could create a cached rdd from it as follows:
+```
+val cachedErrs = errs.cache()
+```
+we would now be able to invoke parallel ops on cachedErrs or on datasets derived from it as usual, but nodes would cache partitions of cachedErrs in mem after the first time they compute them, greatly speeding up subsequent ops on it; 
+**logistic regression:** the following program implements logistic regression, an iterative classification algorithm that attempts to find hyperplane *w* that best separates 2 sets of points, the algorithm performs gradient descent :it starts *w* at a random value, and on each iteration, it sums a function of *w* over the data to move *w* in a direction that improves it, it hence benifits from caching the data in mem across iterations:
+```
+// read points from a text file and cache them
+val points = spark.textFile(...).map(parsePoint).cache()
+// initiate w to random d-dim vector
+var w = Vector.random(D)
+// run multiple iterations to update w
+for (i <- 1 to ITERATIONS) {
+  val grad = spark.accumulator(new Vector(D))
+  for (p <- points) { // runs in parallel
+    val s = (1/(1+exp(-p.y*(w dot p.x)))-1*p.y)
+    grad += s*p.x
+  }
+  w -= grad.value
+}
+```
+first although we create an rdd called points, we process it by running a for loop over it, the for keyword in Scala is syntactic sugar for invoking the foreach method of a collection with the loop body as a closure i.e. the code *for(p <- points){body}* is equivalent to *points.foreach(p => {body})*, hence we are invoking Spark's parallel foreach op, second to sum up the gradient, we use an accumulator var called gradient(with a value of type Vector), note that the loop adds to gradient using an overloaded += operator, the combination of accumulators and for syntax allows Spark porgrams to look much like imperative serial programs, indeed, this example differs from a serial version of logistic regression in only 3 lines; 
+**ALS -alternating least squares:** used for collaborative filtering problems such as predicting users' ratings for movies that they have not seen based on their movie rating history(as in the Netflix Challenge), unlike our previous examples, als is cpu-intensive rather than data-intensive; we briefly sketch als -suppose that we wanted to predict the ratings of *u* users for *m* movies and that we had a partially filled matrix *R* containing known ratings for some user-movie pairs, als models *R* as the product of 2 matrices *M, U* of dims *mtimesk, ktimesu* respectively i.e. each user and each movie has a *k*-dim feature vector describing its characteristics, and a user's rating for a movie is the dot product of its feature vector and the movie's, als solves for *M, U* using the known ratings and then computes *MtimesU* to predict the unknown ones, this is done using the following iterative process: 1.initialize *M* to a random value, 2.optimize *U* given *M* to minimize error on *R*, 3.optimize *M* given *U* to minimize error on *R*, 4.repeat steps2&3 until convergence; als can be parallelized by updating different users/movies on each node in steps2&3, however, because all of the steps use *R*, it is helpful to make *R* a broadcast var so that it does not get re-sent to each node on each step, note that we parallelize the collection 0 until u(a Scala range object) and collect it to update each array:
+```
+val Rb = spark.broadcast(R)
+for (i <- 1 to ITERATIONS) {
+  U = spark.parallelize(0 until u).map(j => updateUser(j, Rb, M)).collect()
+  M = spark.parallelize(0 until m).map(j => updateUser(j, Rb, U)).collect()
+}
+```
+### Implementation
