@@ -271,3 +271,41 @@ for (i <- 1 to ITERATIONS) {
 }
 ```
 ### Implementation
+Spark is built on top of Mesos, a cluster os that lets multiple parallel applications share a cluster in a fine-grained manner and provides an api for applications to launch tasks on a cluster, this allows Spark to run alongside existing cluster computing frameworks such as Mesos ports of Hadoop and MPI, and share data with them, in addition, building on Mesos greatly reduced the programming effort that had to go into Spark;
+the core of Spark is the implementation of rdds, for example, suppose that we define a cached dataset called cachedErrs representing error msgs in a log file, and that we count its elements using map and reduce as in section text search, [these datasets will be stored as a chain of objects capturing the lineage of each rdd, click to view](./img/resilient-distributed-datasets-linear-chain.png), each dataset object contains a pointer to its parent and info about how the parent was transformed;
+internally, each rdd object implementats the same simple interface, which consists of 3 ops including:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
