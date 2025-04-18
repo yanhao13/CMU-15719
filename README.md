@@ -271,41 +271,10 @@ for (i <- 1 to ITERATIONS) {
 }
 ```
 ### Implementation
-Spark is built on top of Mesos, a cluster os that lets multiple parallel applications share a cluster in a fine-grained manner and provides an api for applications to launch tasks on a cluster, this allows Spark to run alongside existing cluster computing frameworks such as Mesos ports of Hadoop and MPI, and share data with them, in addition, building on Mesos greatly reduced the programming effort that had to go into Spark;
-the core of Spark is the implementation of rdds, for example, suppose that we define a cached dataset called cachedErrs representing error msgs in a log file, and that we count its elements using map and reduce as in section text search, [these datasets will be stored as a chain of objects capturing the lineage of each rdd, click to view](./img/resilient-distributed-datasets-linear-chain.png), each dataset object contains a pointer to its parent and info about how the parent was transformed;
-internally, each rdd object implementats the same simple interface, which consists of 3 ops including:
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+Spark is built on top of Mesos, a cluster os that lets multiple parallel applications share a cluster in a fine-grained manner and provides an api for applications to launch tasks on a cluster, this allows Spark to run alongside existing cluster computing frameworks such as Mesos ports of Hadoop and MPI, and share data with them, in addition, building on Mesos greatly reduced the programming effort that had to go into Spark; 
+the core of Spark is the implementation of rdds, for example, suppose that we define a cached dataset called cachedErrs representing error msgs in a log file, and that we count its elements using map and reduce as in section text search, [these datasets will be stored as a chain of objects capturing the lineage of each rdd, click to view](./img/resilient-distributed-datasets-linear-chain.png), each dataset object contains a pointer to its parent and info about how the parent was transformed; 
+internally, each rdd object implementats the same simple interface, which consists of 3 ops including: getPartitions -which returns a list of partition IDs, getIterator(partition) -which iterates over a partition, getPreferredLocations(partition) -which is used for task scheduling to achieve data locality; when a parallel op is invoked on a dataset, Spark creates a task to process each partition of the dataset and sends these tasks to worker nodes, we try to send each task to one of its preferred locations using a technique called delay scheduling, once launched on a worker, each task calls getIterator to start reading its partition; 
+the different types of rdds differ only in how they implement the rdd interface, for example, for a HDFS-Textfile, the partitions are block IDs in hdfs, their preferred locations are the block locations, and getIterator opens a stream to read a block, vs., in a MappedDataset, the partitions and preferred locations are the same as for the parent, but the iterator applies the map function to elements of the parent, vs., in a CachedDataset, the getIterator method looks for a locally cached copy of a transformed partition, and each partition's preferred locations start out equal to parent's preferred locations, but get updated after the partition is cached on some node to prefer using that node, this design makes faults easy to handle :if a node fails, its partitions are re-read from their parent datasets andd eventually cached on other nodes; 
+shipping tasks to worker requires shipping closures to them -both the closures used to define a distributed dataset, and closures passed to ops such as reduce, to achieve this, we rely on the fact that Scala closures are java objects and can be serialized using java serialization, this is a feature of Scala that makes it relatively straightforward to send a computation to another machine; Scala's built-in closure implementation is not ideal, however, because we have found cases where a closure object references vars in the closure's outer scope that are not actually used in its body, we have filed a bug report about this, but in the meantime, we have solved the issue by performing a static analysis of closure classes' bytecode to detect these unused vars and set the corresponding fields in the closure object to null; 
+**shared vars:** the 2 types of shared vars in Spark, broadcast vars and accumulators, are implemented using classes with custom serialization formats, when one creates a broadcast var b with a value v, v is saved to a file in a shared file system, the serialized form of b is a path to this file, when b's value is required on a worker node, Spark first checks whether v is in a local cache, and reads it from the file system if it is not, we initially used hdfs to broadcast vars, but we are developing a more efficient streaming broadcast system; accumulators are implemented using a different serialization trick, each accumulator is given a unique ID when it is created, when the accumulator is saved, its serialized form contains its ID and the 0 value for its type, on the workers, a separate copy of the accumulator is created for each thread that runs a task using thread-local vars, and is set to 0 when a task begins, after each task runs, worker sends a msg to the driver program containing the updates it made to various accumulators, the driver applies updates from each partition of each op only once to prevent double-counting when tasks are re-executed due to failures; 
+**interpreter integration:** here we only sketch how we have integrated Spark into Scala interpreter, the Scala interpreter normally operates by compiling a class for each line typed by user, this class includes a singleton object that contains vars or functions on that line and runs the line's code in its constructor, for example, if user types *var x=5* followed by *println(x)*, the interpreter defines a class(say *Linel*) containing *x* and causes the second line to compile to *print(Linel.getInstance().x)*, these classes are loaded into jvm to run each line, to make the interpreter work with Spark, we made 2 changes including: (i)we made the interpreter output the classes it defines to a shared filesystem, from which they can be loaded by workers using a custom java class loader, (ii)we changed the generated code so that the singleton object for each line references the singleton objects for previous lines directly rather than going through the static *getInstance* methods, this allows closures to capture current state of the singletons they reference whenever they are serialized to be sent to a worker, if we had not done this, then updates to the singleton objects(such as a line setting *x=7* above) would not propagate to workers.
