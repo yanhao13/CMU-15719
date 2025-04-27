@@ -963,4 +963,43 @@ we begin our description of Mesos by discussing our design philosophy, we then d
 ### Mesos Behavior
 here we study Mesos's behavior for different wkloads, our goal is not to develop an exact model of the system but to provide a coarse understanding of this behavior, in order to characterize the environments that Mesos's distributed scheduling model works welll in;
 **definitions, metrics, and assumptions:** here we consider 3 metrics including: framework ramp-up time -time it takes a new framework to achieve its allocation(such as fair share), job completion time -time it takes a job to complete, assuming 1 job per framework, system utilization -total cluster utilization; we characterize wkloads among 2 dims :elasticity and task duration distribution, here an elastic framework such as Hadoop, Dryad, can scale its resources up and down, i.e. it can start using nodes as soon as it acquires them and release them as soon its task finish, vs. a rigid framework such as MPI, can start running its jobs only after it has acquired a fixed quantity of resources and cannot scale up dynamically to take advantage of new resources or scale down without a large impact on perf, for task durations, we consider both homogeneous and heterogeneous distributions; we also differentiate bt 2 types of resources :mandatory and perferred, here a resource is mandatory if a framework must acquire it in order to run, such as a gpu is mandatory if a framework cannot run without access to gpu, vs. a resource is preferred if a framework performs better using it, but can also run using another equivalent resource, such as a framework may prefer running on a node that locally stores its data, but may also be able to read data remotely if it must; we assume the amount of mandatory resources requested by a framework never exceeds its guaranteed share, this ensures that frameworks will not deadlock waiting for the mandatory resources to become free(*in wkloads where mandatory resource demands of active frameworks can exceed capacity of the cluster, the allocation module needs to implement admission conrtol), for simplicity, we also assume that all tasks have the same resource demands and run on identical slices of machines called slots, and that each framework runs a single job;
-**hemogeneous tasks:** we consider a cluster with *n* slots and a framework *f* that is entitled to *k* slots, for the purpose of this analysis we consider 2 distributions of the task durations :consistent(i.e. all tasks have the same length) and exponential, let the mean task duration be *T*, and assume that framework *f* runs a job which requires $\beta$*kT* total computation time, i.e. when framework has *k* slots it takes its job $\beta$*T* time to finish; [click for summarization of the job completion times and system utilization for the 2 types of frameworks and the 2 types of task length distributions](./img/mesos-elastic-rigid-frameworks.png), as expected, elastic frameworks with constant task durations perform the best, while rigid frameworks with exponential task duration perform the worst, it is: (i)
+**hemogeneous tasks:** we consider a cluster with *n* slots and a framework *f* that is entitled to *k* slots, for the purpose of this analysis we consider 2 distributions of the task durations :consistent(i.e. all tasks have the same length) and exponential, let the mean task duration be *T*, and assume that framework *f* runs a job which requires $\beta$*kT* total computation time, i.e. when framework has *k* slots it takes its job $\beta$*T* time to finish; [click for summarization of the job completion times and system utilization for the 2 types of frameworks and the 2 types of task length distributions](./img/mesos-elastic-rigid-frameworks.png), as expected, elastic frameworks with constant task durations perform the best, while rigid frameworks with exponential task duration perform the worst, it is: (i) framework ramp-up time: if task durations are constant, it will take framework *f* at most *T* time to acquire *k* slots, this is simply because during a *T* interval, every slot will become available, which will enable Mesos to offer the framework all *k* of its preferred slots, if the duration distribution is exponential, the expected ramp-up time can be as high as *Tlnk*;
+(ii) job completion time: the expected completion time(*when computing job completion time we assume that the last tasks of the job running on the framework's *k* slots finish at the same time) of an elastic job is at most (1+$\beta$)*T* which is within *T*(i.e. the mean task duration) of the completion time of the job when it gets all its slots instantaneously, rigid jobs achieve similar completion times for constant task durations but exhibit much higher completion times for exponential job durations i.e. (*lnk+*$\beta$)*T* simply because it takes a framework *Tlnk* time on average to acquire all its slots and be able to start its job;
+(iii) system utilization: elastic jobs fully utilize their allocated slots, because they can use every slot as soos as they get it, as a result, assuming infinite demand, a system running only elastic jobs is fully utilized, rigid frameworks achieve slightly worse utilizations, as their jobs cannot start before they get their full allocations, and hence they waste resources held while ramping up;
+**placement preferences:** so far we have assumed that frameworks have no slot preferences, in practice, different frameworks prefer different nodes and their preferences may change overtime, here we consider the case where frameworks have different preferred slots; the natural question is how well Mesos will work compared to a centralized scheduler that has full info about framework preferences, we consider 2 cases including: (i)there exists a system config in which each framework gets all its preferred slots and achieves its full allocation, (ii)there is no such config, i.e. the demand for some preferred slots exceeds the supply, here in the first case, it is easy to see that irrespective of the initial config, the system will converge to the state where each framework allocates its preferred slots after at most one *T* interval, this is simple because during a *T* interval all slots become available, and as a result each framework will be offered its preferred slots, in the second case, there is no config in which all frameworks can satisfy their preferences, the key question in this case is how should one allocate the preferred slots across frameworks demanding them, in particular, assume there are *p* slots preferred by *m* frameworks, where framework *i* requests *ri* such slots, and *sum_{i=1}{m}ri > x*, while many allocation policies are possible, here we consider a weighted fair allocation policy where the weight associated with framework *i* is its intended total allocation *si*, i.e. assuming that each framework has enough demand, we aim to allocate *ptimessi/(sum_{i=1}{m}si)* preferred slots to framework *i*; the challenge in Mesos is that the scheduler does not know preferences of each framework, fortunately, it turns out that there is an easy way to achieve weighted allocation of preferred slots described above :simply perform lottery scheduling, offering slots to frameworks with probs proportional to their intended allocations, in particular, when a slot becomes available, Mesos can offer that slot to framework *i* with prob *si/(sum_{i=1}{n}si)* where *n* is the total #frameworks in the system, furthermore, because each framework *i* receives on average *si* slots every *T* time units, the results for ramp-up times and completion times in section homogeneous tasks still hold;
+**heterogeneous tasks:** so far we have assumed that frameworks have homogeneous task duration distributions, i.e. all frameworks have the same task duration distribution, here we discuss frameworks with heterogeneous task duration distributions, in particular, we consider a wkload where tasks that are either short and long, where mean duration of long tasks is significantly longer than mean of short tasks, such heterogeneous wkloads can hurt frameworks with short tasks, in the worst case, all nodes required by a short job might be filled with long tasks, so the job may need to wait a long time(relative to its exec time) to acquire resources; we note first that random task assignment can work well if the fraction $\theta$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
