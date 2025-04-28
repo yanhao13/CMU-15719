@@ -1096,6 +1096,3 @@ Cosmos 在存储和计算层架构上与 Hadoop 2.0 非常相似，关键区别�
 在这些近期努力之前，资源管理和调度方面已有悠久的研究历史，例如 Condor、Torque、Moab 和 Maui。我们早期的 Hadoop 集群使用了其中一些系统，但我们发现它们无法以最佳方式支持 MapReduce 模型，具体来说，无论是数据局部性还是 map 和 reduce 阶段的弹性调度需求都无法表达，因此被迫分配虚拟 Hadoop，并随之而来的是使用成本。或许这些问题的一部分是由于许多分布式调度器最初是为了支持 MPI 风格和 HPC 应用程序模型以及运行粗粒度的非弹性负载而创建的。这些集群调度器确实允许客户端指定处理环境的类型，但遗憾的是，它们不允许局部性约束，而这正是 Hadoop 的一个关键问题；
 另一类相关技术来自云基础设施领域，例如 EC2、Azure、Eucalyptus 和 VMWare 产品，这些技术主要针对基于虚拟机的集群共享，并且通常是为长时间运行的进程而设计的（因为虚拟机启动时间开销过高）。
 ****
-### Diagnosis via Monitoring & Tracing
-### Principled Workflow-Centric Tracing of Distributed Systems
-### [Sambasivan16](https://dl.acm.org/doi/pdf/10.1145/2987550.2987568)
